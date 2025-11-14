@@ -1,7 +1,13 @@
+use crate::kernel::{Context, Term, TermVar};
+
 #[derive(Debug, Clone)]
 pub enum TermAST {
     Sort(crate::kernel::Sort),
     Identifier(String),
+    Access {
+        module: String,
+        name: String,
+    },
     Prod {
         param: String,
         param_type: Box<TermAST>,
@@ -36,11 +42,22 @@ pub enum Declaration {
         term: TermAST,
     },
     Import {
-        module_name: String,
-        parameters: Vec<(String, TermAST)>,
+        path: AccessPath,
         name_as: String,
     },
     ChildModule(Module),
+}
+
+#[derive(Debug, Clone)]
+pub enum AccessPath {
+    Parent(usize, Vec<ModulePathFrame>),
+    Root(Vec<ModulePathFrame>),
+}
+
+#[derive(Debug, Clone)]
+pub struct ModulePathFrame {
+    pub name: String,
+    pub arguments: Vec<(String, TermAST)>,
 }
 
 #[derive(Debug, Clone)]
@@ -48,4 +65,12 @@ pub struct Module {
     pub name: String,
     pub parameters: Vec<(String, TermAST)>,
     pub body: Vec<Declaration>,
+}
+
+pub enum PendingEffect {
+    // given ctx, v[i]: ty[i] and v[i] := term[i],
+    // check that term[i] : ty[i] for all i
+    // ty[i] may refer to v[j] where j < i while term[i] should not
+    // so we need substitution when checking later terms
+    TypeCheck(Context, Vec<(TermVar, Term, Term)>),
 }

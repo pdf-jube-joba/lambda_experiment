@@ -144,6 +144,14 @@ fn substitute(term: Term, var: &TermVar, value: Term) -> Term {
     }
 }
 
+pub fn substitute_map(term: &Term, map: &[(TermVar, Term)]) -> Term {
+    let mut result = term.clone();
+    for (var, exp) in map {
+        result = substitute(result, var, exp.clone());
+    }
+    result
+}
+
 fn alpha_eq_rec(t1: &Term, t2: &Term, ctx: &mut Vec<(TermVar, TermVar)>) -> bool {
     match (t1, t2) {
         (Term::Sort(s1), Term::Sort(s2)) => s1 == s2,
@@ -384,7 +392,7 @@ fn convertible(t1: &Term, t2: &Term) -> bool {
     }
 }
 
-type Context = Vec<(TermVar, Term)>;
+pub type Context = Vec<(TermVar, Term)>;
 
 pub fn type_infer(context: &Context, term: &Term) -> Option<Term> {
     match term {
