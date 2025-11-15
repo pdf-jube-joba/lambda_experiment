@@ -31,6 +31,12 @@ pub struct ModuleInstantiated {
     pub body: Vec<ModuleItem>,
 }
 
+pub struct Constraint {
+    pub var: TermVar,
+    pub ty: Term,
+    pub arg: Term,
+}
+
 fn instantiate_module(
     elaborated: &ModuleElaborated,
     args: &[(String, Term)],
@@ -109,8 +115,8 @@ impl ModuleSystem {
     pub fn access_path_current(
         &self,
         path: &AccessPathElab,
-    ) -> Result<(ModuleInstantiated, Vec<surface::PendingEffect>), String> {
-        // use PendingEffect::TypeCheck to represent type checking tasks
+    ) -> Result<(ModuleInstantiated, Vec<Constraint>), String> {
+        // use Constraint to represent type checking tasks
         //   when instantiating modules along the access path (v[i] := term[i]) of type ty[i]
 
         // 1. first, resolve where to start
@@ -128,9 +134,9 @@ impl ModuleSystem {
         };
 
         // 2. then, get a corresponding elaborated module (templates) along the path
-        //   and prepare type checking tasks for instantiation
+        //   and prepare constraints for instantiation
         let mut subst_frames: Vec<Vec<(String, Term)>> = Vec::new();
-        let mut pending_effects_frames: Vec<Vec<surface::PendingEffect>> = Vec::new();
+        let mut constraints_frames: Vec<Vec<Constraint>> = Vec::new();
 
         for frame in frames {
             let module_elab = &self.modules[module_idx];
@@ -157,7 +163,7 @@ impl ModuleSystem {
 
             // prepare substitution map for this frame
             let mut subst_args = Vec::new();
-            let mut pending_effects = Vec::new();
+            let mut constraints = Vec::new();
             for ((param_name, param_ty), (arg_name, arg_term)) in child_module_elab
                 .parameters
                 .iter()
@@ -171,16 +177,17 @@ impl ModuleSystem {
                 }
                 // add to substitution args
                 subst_args.push((param_name.clone(), arg_term.clone()));
-                // add type checking task
-                pending_effects.push(surface::PendingEffect::TypeCheck(
-                    Vec::new(),
-                    vec![(TermVar::new(arg_name), arg_term.clone(), param_ty.clone())],
-                ));
+                // add constraint
+                constraints.push(Constraint {
+                    var: TermVar::new(arg_name),
+                    ty: param_ty.clone(),
+                    arg: arg_term.clone(),
+                });
             }
 
             // store for later instantiation
             subst_frames.push(subst_args);
-            pending_effects_frames.push(pending_effects);
+            constraints_frames.push(constraints);
 
             // move to child module
             module_idx = *child_module_idx;
@@ -192,11 +199,8 @@ impl ModuleSystem {
             .flat_map(|args| args.clone())
             .collect::<Vec<_>>();
         let instantiated_module = instantiate_module(&self.modules[module_idx], &subst_map)?;
-        let pending_effects = pending_effects_frames
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+        let constraints = constraints_frames.into_iter().flatten().collect::<Vec<_>>();
 
-        Ok((instantiated_module, pending_effects))
+        Ok((instantiated_module, constraints))
     }
 }

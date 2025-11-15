@@ -62,7 +62,7 @@ pub enum Term {
         n: Box<Term>,
     },
     // for convenience
-    ConstantRef(Rc<DefinedConstant>),
+    DefinedConstant(Rc<DefinedConstant>),
 }
 
 fn substitute(term: Term, var: &TermVar, value: Term) -> Term {
@@ -140,7 +140,7 @@ fn substitute(term: Term, var: &TermVar, value: Term) -> Term {
                 n: new_n,
             }
         }
-        Term::ConstantRef(constant) => Term::ConstantRef(constant),
+        Term::DefinedConstant(constant) => Term::DefinedConstant(constant),
     }
 }
 
@@ -247,7 +247,7 @@ fn reduce_top(term: &Term) -> Option<Term> {
             }),
             _ => None,
         },
-        Term::ConstantRef(def) => Some(def.term.clone()),
+        Term::DefinedConstant(def) => Some(def.term.clone()),
         _ => None,
     }
 }
@@ -347,7 +347,7 @@ pub fn reduce(term: &Term) -> Option<Term> {
                 None
             }
         }
-        Term::ConstantRef(_) => {
+        Term::DefinedConstant(_) => {
             unreachable!("ConstantRef will be reduced in reduce_top")
         }
     }
@@ -522,7 +522,7 @@ pub fn type_infer(context: &Context, term: &Term) -> Option<Term> {
 
             Some(substitute(*m_body.clone(), &m_param, *n.clone()))
         }
-        Term::ConstantRef(constant) => Some(constant.ty.clone()),
+        Term::DefinedConstant(constant) => Some(constant.ty.clone()),
     }
 }
 

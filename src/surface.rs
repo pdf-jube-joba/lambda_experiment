@@ -66,11 +66,3 @@ pub struct Module {
     pub parameters: Vec<(String, TermAST)>,
     pub body: Vec<Declaration>,
 }
-
-pub enum PendingEffect {
-    // given ctx, v[i]: ty[i] and v[i] := term[i],
-    // check that term[i] : ty[i] for all i
-    // ty[i] may refer to v[j] where j < i while term[i] should not
-    // so we need substitution when checking later terms
-    TypeCheck(Context, Vec<(TermVar, Term, Term)>),
-}
