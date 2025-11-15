@@ -21,13 +21,6 @@ pub enum PendingEffect {
     ControlAccess { module: String, name: String },
 }
 
-pub enum InnerCall {
-    // continuation of elaborating Prod param type
-    ProdLeft { param: String, body: TermAST },
-    // continuation of elaborating Prod body
-    ProdRight { param: String, param_type: Term },
-}
-
 pub enum State {
     Done(Term),
     Target(TermAST),
@@ -43,18 +36,20 @@ pub struct TermScopeElaborator {
     // extend in progress
     local_term_vars: Vec<crate::kernel::TermVar>,
     // stack frames of continuations
-    frames: Vec<InnerCall>,
+    frames: Vec<Box<dyn FnOnce(&mut TermScopeElaborator)>>,
 }
 
 impl TermScopeElaborator {
     pub fn elab_one_step(&mut self) {
         match &self.state {
             State::Done(_) => {
-                let Some(frame) = self.frames.pop() else {
-                    // finished
+                if let Some(frame) = self.frames.pop() {
+                    // Resume the next continuation
+                    frame(self);
+                } else {
+                    // No more frames, elaboration is complete
                     return;
-                };
-                todo!()
+                }
             }
             State::Target(term_ast) => {
                 match term_ast {
@@ -94,13 +89,39 @@ impl TermScopeElaborator {
                         param_type,
                         body,
                     } => {
-                        // push a frame to continue after elaborating param_type
-                        self.frames.push(InnerCall::ProdLeft {
-                            param: param.clone(),
-                            body: *body.clone(),
-                        });
-                        // set state to elaborate param_type
-                        self.state = State::Target(*param_type.clone());
+                        let param_var = crate::kernel::TermVar::new(&param);
+                        let param_type = *param_type.clone();
+                        let body = *body.clone();
+
+                        // Push a continuation to handle the body after elaborating the param_type
+                        self.frames.push(Box::new(move |elab| {
+                            // Add the parameter to the local scope
+                            elab.local_term_vars.push(param_var.clone());
+
+                            // Push another continuation to finalize the Prod term
+                            elab.frames.push(Box::new(move |elab| {
+                                // Pop the parameter from the local scope
+                                elab.local_term_vars.pop();
+
+                                // Combine the elaborated parameter type and body into a Prod term
+                                if let State::Done(body) = &elab.state {
+                                    elab.state = State::Done(Term::Prod {
+                                        param: param_var,
+                                        param_type: Box::new(param_type),
+                                        body: Box::new(body.clone()),
+                                    });
+                                } else {
+                                    elab.state =
+                                        State::Err("Unexpected state in Prod finalization".to_string());
+                                }
+                            }));
+
+                            // Set the state to elaborate the body
+                            elab.state = State::Target(body);
+                        }));
+
+                        // Set the state to elaborate the param_type
+                        self.state = State::Target(param_type);
                     }
                     TermAST::Abs {
                         param,
